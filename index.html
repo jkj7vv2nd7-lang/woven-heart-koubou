@@ -56,6 +56,13 @@ input[type="color"]{height:42px; padding:3px;}
 @media (max-width:520px){ .grid2{grid-template-columns:1fr;} }
 /* プレビュー */
 .prevbox{text-align:center;}
+.samples{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+@media (min-width:560px){ .samples{grid-template-columns:1fr 1fr 1fr;} }
+.sample{border:1.5px solid var(--line); background:#fff; border-radius:13px; padding:8px 6px 6px; cursor:pointer; font-family:inherit;}
+.sample:hover{border-color:var(--red);}
+.sample svg{width:100%; height:auto; display:block;}
+.sample span{display:block; font-size:12.5px; font-weight:700; color:var(--ink); margin-top:2px; line-height:1.4;}
+.sample small{display:block; font-size:11px; color:#7a6a58;}
 #preview{width:min(100%,380px); height:auto;}
 /* 絵柄エディタ */
 #gridEd{display:grid; gap:3px; margin:10px auto; width:min(100%,320px);}
@@ -98,6 +105,12 @@ input[type="range"]{width:100%;}
 </header>
 
 <section>
+  <h2>✨ デザイン見本</h2>
+  <p class="small" style="margin-top:0">おしゃれな完成デザインの見本です。タップすると、その配色・柄・本数・モチーフが下のデザイナーに読み込まれます。そこから色を変えたり、本数を変えたりして、自分のデザインに仕上げてください。</p>
+  <div class="samples" id="samples"></div>
+</section>
+
+<section id="designer">
   <h2>🎨 デザインを決める</h2>
   <div class="lvtabs" id="lvTabs">
     <button class="lvtab on" data-lv="easy">初級<span class="lvsub">短冊2〜3本・均等幅</span></button>
@@ -310,10 +323,10 @@ function patDef(id, type, base){
   if(type === "solid") return "";
   return `<pattern id="${id}" width="24" height="24" patternUnits="userSpaceOnUse"><rect width="24" height="24" fill="${base}"/>${inner}</pattern>`;
 }
-function fillFor(which){
-  const col = which === "A" ? S.colA : S.colB;
-  const pat = which === "A" ? S.patA : S.patB;
-  return pat === "solid" ? col : `url(#wpat${which})`;
+function fillForP(P, which, prefix){
+  const col = which === "A" ? P.colA : P.colB;
+  const pat = which === "A" ? P.patA : P.patB;
+  return pat === "solid" ? col : `url(#${prefix}${which})`;
 }
 
 /* ============ プレビュー ============ */
@@ -322,38 +335,100 @@ function heartPath(cx, topY, w){
   const p = (x, y) => `${(cx + (x - 100) * s).toFixed(1)},${(topY + y * s).toFixed(1)}`;
   return `M ${p(100,196)} C ${p(30,140)} ${p(18,105)} ${p(20,74)} C ${p(22,44)} ${p(48,30)} ${p(70,36)} C ${p(86,40)} ${p(96,50)} ${p(100,60)} C ${p(104,50)} ${p(114,40)} ${p(130,36)} C ${p(152,30)} ${p(178,44)} ${p(180,74)} C ${p(182,105)} ${p(170,140)} ${p(100,196)} Z`;
 }
-function renderPreview(){
-  const { na, nb, fa, fb } = curStrips();
-  const W = 200, sqX = 48, sqY = 74, sq = 106;
-  let xs = [sqX]; fa.forEach(f => xs.push(xs[xs.length - 1] + f * sq));
-  let ys = [sqY]; fb.forEach(f => ys.push(ys[ys.length - 1] + f * sq));
+function heartSVG(P, prefix){
+  const sqX = 48, sqY = 74, sq = 106;
+  let xs = [sqX]; P.fa.forEach(f => xs.push(xs[xs.length - 1] + f * sq));
+  let ys = [sqY]; P.fb.forEach(f => ys.push(ys[ys.length - 1] + f * sq));
   let cells = "";
-  for(let r = 0; r < nb; r++) for(let c = 0; c < na; c++){
-    const isA = cellIsA(r, c);
-    cells += `<rect class="wcell" data-a="${isA ? 1 : 0}" x="${xs[c].toFixed(1)}" y="${ys[r].toFixed(1)}" width="${(xs[c + 1] - xs[c]).toFixed(1)}" height="${(ys[r + 1] - ys[r]).toFixed(1)}" fill="${fillFor(isA ? "A" : "B")}" stroke="rgba(90,40,20,.25)" stroke-width="0.7"/>`;
+  for(let r = 0; r < P.nb; r++) for(let c = 0; c < P.na; c++){
+    const isA = P.cellA(r, c);
+    cells += `<rect class="wcell" data-a="${isA ? 1 : 0}" x="${xs[c].toFixed(1)}" y="${ys[r].toFixed(1)}" width="${(xs[c + 1] - xs[c]).toFixed(1)}" height="${(ys[r + 1] - ys[r]).toFixed(1)}" fill="${fillForP(P, isA ? "A" : "B", prefix)}" stroke="rgba(90,40,20,.25)" stroke-width="0.7"/>`;
   }
   const hp = heartPath(100, 6, 200);
-  const svg = `<svg id="previewSvg" viewBox="0 0 200 208" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="編み上がりプレビュー">
-  <defs>${patDef("wpatA", S.patA, S.colA)}${patDef("wpatB", S.patB, S.colB)}
-    <clipPath id="hclip"><path d="${hp}"/></clipPath>
+  return `<svg viewBox="0 0 200 208" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="編み上がりプレビュー">
+  <defs>${patDef(prefix + "A", P.patA, P.colA)}${patDef(prefix + "B", P.patB, P.colB)}
+    <clipPath id="${prefix}clip"><path d="${hp}"/></clipPath>
   </defs>
-  <path d="M100,-2 a4,4 0 0 1 4,4 v18 a4,4 0 0 1 -8,0 v-18 a4,4 0 0 1 4,-4" fill="none"/>
-  <rect x="88" y="2" width="24" height="34" rx="4" fill="${fillFor("A")}" stroke="rgba(90,40,20,.35)"/>
-  <g clip-path="url(#hclip)">
-    <path d="M0,0 H100 V208 H0 Z" fill="${fillFor("A")}"/>
-    <path d="M100,0 H200 V208 H100 Z" fill="${fillFor("B")}"/>
-    <rect x="${sqX}" y="${sqY}" width="${sq}" height="${sq}" fill="#fff" opacity="0"/>
+  <rect x="88" y="2" width="24" height="34" rx="4" fill="${fillForP(P, "A", prefix)}" stroke="rgba(90,40,20,.35)"/>
+  <g clip-path="url(#${prefix}clip)">
+    <path d="M0,0 H100 V208 H0 Z" fill="${fillForP(P, "A", prefix)}"/>
+    <path d="M100,0 H200 V208 H100 Z" fill="${fillForP(P, "B", prefix)}"/>
     ${cells}
-    <path d="M${sqX},${sqY + sq} L100,206 L${sqX + sq},${sqY + sq} L100,${sqY + sq - 14} Z" fill="${fillFor("B")}" opacity=".88"/>
-    <path d="M${sqX},${sqY + sq} L100,206 L100,${sqY + sq - 14} Z" fill="${fillFor("A")}" opacity=".88"/>
+    <path d="M${sqX},${sqY + sq} L100,206 L${sqX + sq},${sqY + sq} L100,${sqY + sq - 14} Z" fill="${fillForP(P, "B", prefix)}" opacity=".88"/>
+    <path d="M${sqX},${sqY + sq} L100,206 L100,${sqY + sq - 14} Z" fill="${fillForP(P, "A", prefix)}" opacity=".88"/>
   </g>
   <path d="${hp}" fill="none" stroke="rgba(90,40,20,.5)" stroke-width="1.6"/>
   </svg>`;
-  document.getElementById("preview").innerHTML = svg;
+}
+function curParams(){
+  const { na, nb, fa, fb } = curStrips();
+  return { colA: S.colA, colB: S.colB, patA: S.patA, patB: S.patB, na, nb, fa, fb, cellA: (r, c) => cellIsA(r, c) };
+}
+function renderPreview(){
+  const svg = heartSVG(curParams(), "wpat");
+  document.getElementById("preview").innerHTML = svg.replace("<svg ", '<svg id="previewSvg" ');
+  const { na } = curStrips();
   const note = S.level === "pic"
     ? `上級（絵柄編み）：${S.gridN}×${S.gridN}マスの編み図どおりに編むと、この絵柄が表れます。`
     : `短冊はピースA・ピースBとも${na}本。市松模様（行＋列が偶数＝A、奇数＝B）で編み上がります。`;
   document.getElementById("prevNote").textContent = note;
+}
+
+/* ============ デザイン見本 ============ */
+const SAMPLES = [
+  { name: "定番の赤×白", sub: "初級・3本", level: "easy", n: 3, colA: "#c93b2e", colB: "#f3ead8", patA: "solid", patB: "solid" },
+  { name: "クリスマス", sub: "中級・4本", level: "mid", n: 4, widthMode: "equal", colA: "#1f7a4d", colB: "#c93b2e", patA: "solid", patB: "dots" },
+  { name: "バレンタイン・ピンク", sub: "上級・ハートの絵柄編み", level: "pic", motif: "heart", colA: "#e75480", colB: "#fbe9ee", patA: "solid", patB: "solid" },
+  { name: "雪の結晶", sub: "上級・絵柄編み", level: "pic", motif: "snow", colA: "#2b50b0", colB: "#eef3fb", patA: "solid", patB: "solid" },
+  { name: "星空の星", sub: "上級・絵柄編み", level: "pic", motif: "star", colA: "#f2c53d", colB: "#2b3a67", patA: "solid", patB: "solid" },
+  { name: "パステル市松", sub: "中級・6本ミックス", level: "mid", n: 6, widthMode: "mix", colA: "#8ecae6", colB: "#f9a8c9", patA: "solid", patB: "solid" },
+];
+function sampleParams(sm){
+  if(sm.level === "pic"){
+    const src = MOTIFS[sm.motif];
+    const bits = src.map(row => [...row].map(ch => ch === "1" ? 1 : 0));
+    return { colA: sm.colA, colB: sm.colB, patA: sm.patA, patB: sm.patB, na: 8, nb: 8,
+      fa: stripFracs(8, "equal"), fb: stripFracs(8, "equal"), cellA: (r, c) => bits[r][c] === 1 };
+  }
+  const mode = sm.level === "easy" ? "equal" : (sm.widthMode || "equal");
+  return { colA: sm.colA, colB: sm.colB, patA: sm.patA, patB: sm.patB, na: sm.n, nb: sm.n,
+    fa: stripFracs(sm.n, mode), fb: stripFracs(sm.n, mode), cellA: (r, c) => (r + c) % 2 === 0 };
+}
+function renderSamples(){
+  const box = document.getElementById("samples");
+  box.innerHTML = "";
+  SAMPLES.forEach((sm, i) => {
+    const b = document.createElement("button");
+    b.className = "sample";
+    b.innerHTML = heartSVG(sampleParams(sm), "sm" + i + "p") + `<span>${sm.name}</span><small>${sm.sub}</small>`;
+    b.onclick = () => applySample(sm);
+    box.appendChild(b);
+  });
+}
+function applySample(sm){
+  S.level = sm.level;
+  S.colA = sm.colA; S.colB = sm.colB; S.patA = sm.patA; S.patB = sm.patB;
+  if(sm.level === "easy") S.easyN = sm.n;
+  if(sm.level === "mid"){ S.midN = sm.n; S.widthMode = sm.widthMode || "equal"; }
+  if(sm.level === "pic") setMotif(sm.motif);
+  document.getElementById("colA").value = sm.colA;
+  document.getElementById("colB").value = sm.colB;
+  document.getElementById("patA").value = sm.patA;
+  document.getElementById("patB").value = sm.patB;
+  document.getElementById("selWidthMode").value = S.widthMode;
+  syncDesignerUI();
+  rebuildSwatches();
+  renderAll();
+  document.getElementById("designer").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function syncDesignerUI(){
+  document.querySelectorAll("#lvTabs .lvtab").forEach(x => x.classList.toggle("on", x.dataset.lv === S.level));
+  document.getElementById("ctlEasy").style.display = S.level === "easy" ? "" : "none";
+  document.getElementById("ctlMid").style.display = S.level === "mid" ? "" : "none";
+  document.getElementById("ctlPic").style.display = S.level === "pic" ? "" : "none";
+  document.querySelectorAll("#segEasyN button").forEach(x => x.classList.toggle("on", +x.dataset.n === S.easyN));
+  document.querySelectorAll("#segMidN button").forEach(x => x.classList.toggle("on", +x.dataset.n === S.midN));
+  document.querySelectorAll("#segMotif button").forEach(x => x.classList.toggle("on", x.dataset.m === S.motif));
 }
 
 /* ============ 絵柄エディタ ============ */
@@ -550,6 +625,7 @@ document.getElementById("patB").onchange = e => { S.patB = e.target.value; rende
 document.getElementById("selSize").onchange = refreshPrint;
 document.getElementById("selPrintMode").onchange = refreshPrint;
 rebuildSwatches();
+renderSamples();
 renderAll();
 </script>
 </body>
