@@ -88,10 +88,13 @@ input[type="range"]{width:100%;}
 /* 印刷用 */
 #printArea{display:none;}
 @media print{
-  body{background:#fff;}
-  .wrap>*:not(#printArea){display:none !important;}
-  #printArea{display:block !important;}
   @page{size:A4 portrait; margin:0;}
+  html,body{margin:0 !important; padding:0 !important; background:#fff;}
+  .wrap{max-width:none; margin:0; padding:0;}
+  .wrap>*:not(#printArea){display:none !important;}
+  #printArea{display:block !important; width:210mm; height:297mm; overflow:hidden;
+    font-size:0; line-height:0; page-break-inside:avoid; page-break-after:avoid;}
+  #printArea svg{display:block;}
 }
 </style>
 </head>
@@ -450,8 +453,8 @@ function renderGridEd(){
 function renderGuide(){
   const { na, nb } = curStrips();
   const steps = [
-    `色紙（またはフェルト）を2枚用意します。ピースA用とピースB用です。型紙を印刷して切り取り、色紙に写すか、そのまま型紙を重ねて切ります。`,
-    `ピースA・ピースBの両方とも、紙を半分に折ります（型紙のいちばん下が「折り目」です）。折ったまま、輪郭を切り取ります。`,
+    `型紙を印刷して、長丸の輪郭を切り取ります。これがピースA・ピースBの「広げた全体の形」です（色紙やフェルトで作るときは、「輪郭だけ」で印刷した型紙を写し取って切ります）。`,
+    `ピースA・ピースBの両方とも、中央の赤い破線（折り目）で半分に折ります。絵柄が外側に来るように折ってください。`,
     `折ったまま、切り込みの線に沿って切り込みを入れます。切り込みは折り目の手前で止めてください（帯が輪のまま残ります）。`,
     `ピースAをたてに（丸い方が上）、ピースBをよこに（丸い方が右）持って、編み始めます。下の「編む順番」のとおりに、Bの帯を1本ずつAに編み込んでください。`,
     `全部編めたら、形を整えてハートのポケットを開きます。`,
@@ -469,23 +472,26 @@ function renderGuide(){
 
 /* ============ 型紙（A4・mm単位SVG） ============ */
 function pieceSVG(x0, y0, W, label, col, pat, fracs, outlineOnly){
-  const H = W * 1.5, stripH = W, capR = W / 2;
+  /* 広げた全体形＝長丸（両端が丸い長円形）。中央が折り目。長さ3W×幅W */
+  const L = W * 3, midY = y0 + L / 2, capR = W / 2;
   const fill = outlineOnly ? "none" : (pat === "solid" ? col : `url(#ppat${label})`);
   let g = `<g>
-    <path d="M ${x0},${y0 + H} L ${x0},${y0 + capR} A ${capR},${capR} 0 0 1 ${x0 + W},${y0 + capR} L ${x0 + W},${y0 + H} Z"
+    <path d="M ${x0},${y0 + capR} A ${capR},${capR} 0 0 1 ${x0 + W},${y0 + capR} L ${x0 + W},${y0 + L - capR} A ${capR},${capR} 0 0 1 ${x0},${y0 + L - capR} Z"
       fill="${fill}" stroke="#333" stroke-width="0.7"/>
-    <line x1="${x0}" y1="${y0 + H}" x2="${x0 + W}" y2="${y0 + H}" stroke="#c93b2e" stroke-width="0.8" stroke-dasharray="4 2"/>
-    <text x="${x0 + W / 2}" y="${y0 + H + 5}" font-size="4" text-anchor="middle" fill="#c93b2e">折り目（ここが下になります）</text>`;
+    <line x1="${x0}" y1="${midY}" x2="${x0 + W}" y2="${midY}" stroke="#c93b2e" stroke-width="0.8" stroke-dasharray="4 2"/>
+    <text x="${x0 + W / 2}" y="${midY - 2}" font-size="4" text-anchor="middle" fill="#c93b2e" style="paint-order:stroke" stroke="rgba(255,255,255,.85)" stroke-width="1.4">折り目</text>`;
   let x = x0;
   const cuts = [];
   for(let i = 0; i < fracs.length - 1; i++){ x += fracs[i] * W; cuts.push(x); }
   cuts.forEach(cx => {
-    g += `<line x1="${cx.toFixed(1)}" y1="${y0 + capR}" x2="${cx.toFixed(1)}" y2="${y0 + H - 4}" stroke="#14655a" stroke-width="0.55"/>`;
+    g += `<line x1="${cx.toFixed(1)}" y1="${y0 + capR}" x2="${cx.toFixed(1)}" y2="${midY - 4}" stroke="#14655a" stroke-width="0.55"/>`;
+    g += `<line x1="${cx.toFixed(1)}" y1="${midY + 4}" x2="${cx.toFixed(1)}" y2="${y0 + L - capR}" stroke="#14655a" stroke-width="0.55"/>`;
   });
   let cx = x0;
   fracs.forEach((f, i) => {
-    const w = f * W;
-    g += `<text x="${(cx + w / 2).toFixed(1)}" y="${y0 + H - 8}" font-size="5.5" text-anchor="middle" fill="#14655a" font-weight="bold">${i + 1}</text>`;
+    const w = f * W, cxx = (cx + w / 2).toFixed(1);
+    g += `<text x="${cxx}" y="${midY - 8}" font-size="5.5" text-anchor="middle" fill="#14655a" font-weight="bold">${i + 1}</text>`;
+    g += `<text x="${cxx}" y="${midY + 13.5}" font-size="5.5" text-anchor="middle" fill="#14655a" font-weight="bold">${i + 1}</text>`;
     cx += w;
   });
   g += `<text x="${x0 + W / 2}" y="${y0 + capR - 4}" font-size="6" text-anchor="middle" fill="#333" font-weight="bold">ピース${label}</text>`;
@@ -497,33 +503,50 @@ function buildPrintSVG(){
   const mode = document.getElementById("selPrintMode").value;
   const outlineOnly = mode === "outline";
   const { fa, fb } = curStrips();
-  const gap = 12, x1 = (210 - (W * 2 + gap)) / 2, y0 = 26;
-  const H = W * 1.5;
-  const handleY = y0 + H + 12, handleLen = Math.min(170, W * 2), handleX = (210 - handleLen) / 2;
+  const gap = 12, x1 = (210 - (W * 2 + gap)) / 2, y0 = 20;
+  const L = W * 3, botY = y0 + L;
+  const isPic = S.level === "pic";
+  /* 持ち手：下に置ける大きさは横置き、大きい型紙と絵柄編み（中）は中央のすき間に縦置き */
+  let handle = "";
+  const gapHandle = (isPic && W >= 70) || W >= 90;
+  if(gapHandle){
+    const hx = x1 + W + 1, hw = gap - 2, hy = y0 + 34, hh = L - 68;
+    handle = `<g>
+      <rect x="${hx}" y="${hy}" width="${hw}" height="${hh}" fill="${outlineOnly ? "none" : S.colA}" stroke="#333" stroke-width="0.7"/>
+      <text x="${hx + hw / 2}" y="${hy + hh / 2}" font-size="4" text-anchor="middle" fill="${outlineOnly ? "#333" : "#fff"}" transform="rotate(-90 ${hx + hw / 2} ${hy + hh / 2})">持ち手の帯（ハートの内側に貼ります）</text>
+    </g>`;
+  } else {
+    const hy = botY + 10 + (isPic ? 62 : 0), hLen = Math.min(160, W * 2), hx = (210 - hLen) / 2;
+    handle = `<g>
+      <rect x="${hx}" y="${hy}" width="${hLen}" height="15" fill="${outlineOnly ? "none" : S.colA}" stroke="#333" stroke-width="0.7"/>
+      <text x="105" y="${hy + 9.5}" font-size="4.5" text-anchor="middle" fill="${outlineOnly ? "#333" : "#fff"}">持ち手の帯（ハートの内側に貼ります）</text>
+    </g>`;
+  }
   let chart = "";
-  if(S.level === "pic"){
-    const n = S.gridN, cs = Math.min(9, 120 / n, (266 - (handleY + 30)) / n), cw = cs * n;
-    const cx0 = (210 - cw) / 2, cy0 = handleY + 30;
-    chart += `<text x="105" y="${cy0 - 4}" font-size="5" text-anchor="middle" fill="#333">編み図（色のついたマス＝ピースAが見える場所）</text>`;
-    for(let r = 0; r < n; r++) for(let c = 0; c < n; c++){
-      chart += `<rect x="${(cx0 + c * cs).toFixed(1)}" y="${(cy0 + r * cs).toFixed(1)}" width="${cs}" height="${cs}" fill="${S.bits[r][c] ? S.colA : "#efe7d7"}" stroke="#999" stroke-width="0.3"/>`;
+  if(isPic){
+    if(W >= 90){
+      chart = `<text x="105" y="${botY + 6}" font-size="4" text-anchor="middle" fill="#666">※ この大きさでは編み図が入りきらないため、編み図はアプリ画面の「作り方ガイド」でご確認ください。</text>`;
+    } else {
+      const n = S.gridN, cs = Math.min(9, (288 - (botY + 12)) / n, 120 / n), cw = cs * n;
+      const cx0 = (210 - cw) / 2, cy0 = botY + 16;
+      chart += `<text x="105" y="${cy0 - 3}" font-size="5" text-anchor="middle" fill="#333">編み図（色のついたマス＝ピースAが見える場所）</text>`;
+      for(let r = 0; r < n; r++) for(let c = 0; c < n; c++){
+        chart += `<rect x="${(cx0 + c * cs).toFixed(1)}" y="${(cy0 + r * cs).toFixed(1)}" width="${cs}" height="${cs}" fill="${S.bits[r][c] ? S.colA : "#efe7d7"}" stroke="#999" stroke-width="0.3"/>`;
+      }
+      for(let j = 0; j < n; j++) chart += `<text x="${cx0 - 3}" y="${cy0 + j * cs + cs * 0.7}" font-size="4" text-anchor="end" fill="#333">${j + 1}</text>`;
     }
-    for(let j = 0; j < n; j++) chart += `<text x="${cx0 - 3}" y="${cy0 + j * cs + cs * 0.7}" font-size="4" text-anchor="end" fill="#333">${j + 1}</text>`;
   }
   return `<svg id="printSvg" xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297">
   <defs>${patDef("ppatA", S.patA, S.colA)}${patDef("ppatB", S.patB, S.colB)}</defs>
-  <text x="105" y="12" font-size="7" text-anchor="middle" font-weight="bold" fill="#333">編み込みハート 型紙（幅${W / 10}cm）</text>
-  <text x="105" y="19" font-size="4" text-anchor="middle" fill="#666">実線＝切り取る線／緑の線＝切り込み／赤い破線＝折り目。紙を半分に折ってから切ります。</text>
+  <text x="105" y="11" font-size="7" text-anchor="middle" font-weight="bold" fill="#333">編み込みハート 型紙（幅${W / 10}cm）</text>
+  <text x="105" y="16.5" font-size="3.6" text-anchor="middle" fill="#666">広げた全体の形です。実線＝切り取り線／緑＝切り込み／赤い破線＝中央の折り目。切り取ってから半分に折ります。</text>
+  <g stroke="#333" stroke-width="0.6">
+    <line x1="8" y1="13" x2="58" y2="13"/><line x1="8" y1="10.5" x2="8" y2="15.5"/><line x1="58" y1="10.5" x2="58" y2="15.5"/>
+  </g>
+  <text x="8" y="8.5" font-size="4" fill="#333">5cm</text>
   ${pieceSVG(x1, y0, W, "A", S.colA, S.patA, fa, outlineOnly)}
   ${pieceSVG(x1 + W + gap, y0, W, "B", S.colB, S.patB, fb, outlineOnly)}
-  <g>
-    <rect x="${handleX}" y="${handleY}" width="${handleLen}" height="16" fill="${outlineOnly ? "none" : S.colA}" stroke="#333" stroke-width="0.7"/>
-    <text x="105" y="${handleY + 10.5}" font-size="4.5" text-anchor="middle" fill="${outlineOnly ? "#333" : "#fff"}">持ち手の帯（ハートの内側に貼ります）</text>
-  </g>
-  <g stroke="#333" stroke-width="0.6">
-    <line x1="14" y1="282" x2="64" y2="282"/><line x1="14" y1="279" x2="14" y2="285"/><line x1="64" y1="279" x2="64" y2="285"/>
-  </g>
-  <text x="14" y="276" font-size="4.5" fill="#333">5cm（印刷後に定規で確かめてください）</text>
+  ${handle}
   ${chart}
   </svg>`;
 }
